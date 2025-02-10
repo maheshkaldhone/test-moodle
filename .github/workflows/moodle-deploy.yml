@@ -1,116 +1,105 @@
-name: Manual Plugin Deployment
+name: Auto Plugin Deployment
 
 on:
+  push:
+    branches:
+      - main
+      - dev
   workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Select branch to deploy'
-        required: true
-        type: choice
-        options:
-          - main
-          - dev
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
   DEV_MOODLE_ROOT: /var/www/html/moodle
 
 jobs:
-  package-plugin:
-    name: Package Plugin
+  find-changed:
+    name: Find Changed Plugin Directories
     runs-on: ubuntu-latest
     outputs:
-      zip-file: ${{ steps.zip.outputs.zip-file }}
-      timestamp: ${{ steps.timestamp.outputs.time }}
-      plugin-directory: ${{ steps.plugin-dir.outputs.plugin-directory }}
-      
+      plugins: ${{ steps.list_plugins.outputs.plugins }}
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Checkout selected branch
+      - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch }}
 
-      - name: Paths Filter
+      # Detect changes in any file under the mod/ directory
+      - name: Detect changes in mod folder
+        id: filter
         uses: dorny/paths-filter@v3
-        id: filter-plugin-changes
         with:
           list-files: json
           filters: |
-            plugin-changes:
-              - 'mod/**'
+            mod:
+              - "mod/**"
 
-      - name: Determine plugin directory
-        id: plugin-dir
+      # Extract unique plugin directories (the first subfolder under mod)
+      - name: Extract changed plugin directories
+        id: list_plugins
         run: |
-          FILES='${{ toJSON(steps.filter-plugin-changes.outputs.plugin-changes_files) }}'
-          PLUGIN_DIR=$(echo "$FILES" | jq -r '.[0]' | cut -d'/' -f2)
-          echo "plugin-directory=$PLUGIN_DIR" >> $GITHUB_OUTPUT
-
-      - name: Generate timestamp
-        id: timestamp
-        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
-
-      - name: Create deployment package
-        id: zip
-        run: |
-          if [ "${{ steps.filter-plugin-changes.outputs.plugin-changes }}" != "true" ]; then
-            echo "No plugin changes detected. Skipping zip creation."
-            exit 0
-          fi
-          
-          ZIP_FILE="${{ github.event.inputs.branch }}-${{ steps.plugin-dir.outputs.plugin-directory }}-${{ steps.timestamp.outputs.time }}.zip"
-          cd mod
-          zip -qr "../$ZIP_FILE" "${{ steps.plugin-dir.outputs.plugin-directory }}"
-          echo "zip-file=$ZIP_FILE" >> $GITHUB_OUTPUT
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugin-package-${{ github.event.inputs.branch }}
-          path: ${{ steps.zip.outputs.zip-file }}
-          retention-days: 5
+          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
+          # Extract the second field from paths like mod/<plugin>/... then remove duplicates.
+          plugins=$(echo "${{ steps.filter.outputs.mod_files }}" | jq -r '.[]' | awk -F'/' 'NF>=2 {print $2}' | sort -u | jq -R -s -c 'split("\n")[:-1]')
+          echo "Detected plugins: $plugins"
+          echo "plugins=$plugins" >> $GITHUB_OUTPUT
 
   deploy:
-    name: Deploy to Instance
-    needs: package-plugin
+    name: Deploy Changed Plugins
+    needs: find-changed
+    # Only run if at least one plugin was changed
+    if: ${{ fromJson(needs.find-changed.outputs.plugins) != [] }}
+    strategy:
+      matrix:
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
     runs-on: 
       - self-hosted
       - Linux
       - X64
-      - ${{ github.event.inputs.branch == 'dev' && 'dev' || 'prod' }}
-    if: contains(fromJson('["dev", "main"]'), github.event.inputs.branch)
+      # Choose the correct runner tag based on the branch name.
+      - ${{ github.ref == 'refs/heads/dev' && 'dev' || 'prod' }}
     environment:
-      name: ${{ github.event.inputs.branch == 'main' && 'production' || 'development' }}
-      url: ${{ github.event.inputs.branch == 'main' && 'http://moodle-lb-244874513.us-east-2.elb.amazonaws.com' || 'http://moodle-dev-lb-244874513.us-east-2.elb.amazonaws.com' }}
-
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      url: ${{ github.ref == 'refs/heads/main' && 'http://moodle-lb-244874513.us-east-2.elb.amazonaws.com' || 'http://moodle-dev-lb-244874513.us-east-2.elb.amazonaws.com' }}
     steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
+      - name: Checkout Selected Branch
+        uses: actions/checkout@v4
+
+      - name: Generate Timestamp
+        id: timestamp
+        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Package Plugin
+        id: zip
+        run: |
+          ZIP_FILE="${{ github.ref_name }}-${{ matrix.plugin }}-${{ steps.timestamp.outputs.time }}.zip"
+          cd mod
+          zip -qr "../$ZIP_FILE" "${{ matrix.plugin }}"
+          echo "zip-file=$ZIP_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: plugin-package-${{ github.event.inputs.branch }}
-          path: /tmp
+          name: plugin-package-${{ github.ref_name }}-${{ matrix.plugin }}
+          path: ${{ steps.zip.outputs.zip-file }}
+          retention-days: 5
 
       - name: Determine Moodle Root Path
         id: determine-path
         run: |
-          case "${{ github.event.inputs.branch }}" in
+          case "${{ github.ref_name }}" in
             dev)  MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
             main) MOODLE_PATH=${{ env.PROD_MOODLE_ROOT }} ;;
+            *) echo "Unsupported branch" && exit 1 ;;
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> $GITHUB_ENV
 
-      - name: Compare version numbers
+      - name: Compare Version Numbers
         run: |
-          PLUGIN_DIR="${{ needs.package-plugin.outputs.plugin-directory }}"
-          TEMP_ARTIFACT_DIR="/tmp/temp_artifact_${{ needs.package-plugin.outputs.timestamp }}"
+          TEMP_ARTIFACT_DIR="/tmp/temp_artifact_${{ steps.timestamp.outputs.time }}"
           mkdir -p "$TEMP_ARTIFACT_DIR"
 
-          unzip -q "/tmp/${{ needs.package-plugin.outputs.zip-file }}" -d "$TEMP_ARTIFACT_DIR"
+          unzip -q "/tmp/${{ steps.zip.outputs.zip-file }}" -d "$TEMP_ARTIFACT_DIR"
 
-          artifact_file="$TEMP_ARTIFACT_DIR/$PLUGIN_DIR/version.php"
-          server_file="${{ env.MOODLE_PATH }}/mod/$PLUGIN_DIR/version.php"
+          artifact_file="$TEMP_ARTIFACT_DIR/${{ matrix.plugin }}/version.php"
+          server_file="${{ env.MOODLE_PATH }}/mod/${{ matrix.plugin }}/version.php"
 
           if [ ! -f "$artifact_file" ]; then
             echo "::error:: Artifact version file not found!"
@@ -134,15 +123,14 @@ jobs:
 
           rm -rf "$TEMP_ARTIFACT_DIR"
 
-      - name: Backup current plugin directory
+      - name: Backup Current Plugin Directory
         run: |
-          PLUGIN_DIR="${{ needs.package-plugin.outputs.plugin-directory }}"
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-          PLUGIN_DIR_PATH="${{ env.MOODLE_PATH }}/mod/$PLUGIN_DIR"
-          BACKUP_FILE="/tmp/$PLUGIN_DIR-backup-${TIMESTAMP}.zip"
+          PLUGIN_DIR="${{ env.MOODLE_PATH }}/mod/${{ matrix.plugin }}"
+          BACKUP_FILE="/tmp/${{ matrix.plugin }}-backup-${TIMESTAMP}.zip"
 
-          if [ -d "$PLUGIN_DIR_PATH" ]; then
-            sudo zip -r "$BACKUP_FILE" "$PLUGIN_DIR_PATH"
+          if [ -d "$PLUGIN_DIR" ]; then
+            sudo zip -r "$BACKUP_FILE" "$PLUGIN_DIR"
             echo "Backup created at $BACKUP_FILE"
           else
             echo "No existing plugin directory found, skipping backup."
@@ -150,7 +138,6 @@ jobs:
 
       - name: Deploy to Moodle
         run: |
-          PLUGIN_DIR="${{ needs.package-plugin.outputs.plugin-directory }}"
           DEPLOY_DIR="${{ env.MOODLE_PATH }}/mod"
-          sudo unzip -qo "/tmp/${{ needs.package-plugin.outputs.zip-file }}" -d "$DEPLOY_DIR"
-          sudo chown -R www-data:www-data "$DEPLOY_DIR/$PLUGIN_DIR"
+          sudo unzip -qo "/tmp/${{ steps.zip.outputs.zip-file }}" -d "$DEPLOY_DIR"
+          sudo chown -R www-data:www-data "$DEPLOY_DIR/${{ matrix.plugin }}"
