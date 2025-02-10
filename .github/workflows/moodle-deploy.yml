@@ -38,14 +38,6 @@ jobs:
           filters: |
             plugin-changes:
               - 'mod/**'  # Assuming your plugin directories are under 'mod/'
-        
-      - name: Validate plugin directory
-        run: |
-          PLUGIN_PATH="${{ steps.filter.outputs.plugin-changes_files }}"
-          if [ ! -d "$PLUGIN_PATH" ]; then
-            echo "::error:: Plugin directory '$PLUGIN_PATH' not found in ${{ github.event.inputs.branch }} branch!"
-            exit 1
-          fi
 
       - name: Generate timestamp
         id: timestamp
