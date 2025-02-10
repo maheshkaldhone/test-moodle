@@ -22,17 +22,11 @@ jobs:
     outputs:
       zip-file: ${{ steps.zip.outputs.zip-file }}
       timestamp: ${{ steps.timestamp.outputs.time }}
-      plugin-directory: ${{ steps.filter.outputs.plugin-changes }}  
+      plugin-directory: ${{ steps.plugin-dir.outputs.plugin-directory }}
       
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter-mod-changes
-        with:
-          filters: |
-            plugin-changes:
-              - 'mod/**'
-
+      
       - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
@@ -47,9 +41,12 @@ jobs:
             plugin-changes:
               - 'mod/**'
 
-      - name: Print plugin changes
+      - name: Determine plugin directory
+        id: plugin-dir
         run: |
-          echo "Plugin changes: ${{ steps.filter-plugin-changes.outputs.plugin-changes }}"
+          FILES='${{ toJSON(steps.filter-plugin-changes.outputs.plugin-changes_files) }}'
+          PLUGIN_DIR=$(echo "$FILES" | jq -r '.[0]' | cut -d'/' -f2)
+          echo "plugin-directory=$PLUGIN_DIR" >> $GITHUB_OUTPUT
 
       - name: Generate timestamp
         id: timestamp
@@ -63,9 +60,9 @@ jobs:
             exit 0
           fi
           
-          ZIP_FILE="${{ github.event.inputs.branch }}-${{ steps.filter-plugin-changes.outputs.plugin-changes }}-${{ steps.timestamp.outputs.time }}.zip"
+          ZIP_FILE="${{ github.event.inputs.branch }}-${{ steps.plugin-dir.outputs.plugin-directory }}-${{ steps.timestamp.outputs.time }}.zip"
           cd mod
-          zip -qr "../$ZIP_FILE" "${{ steps.filter-plugin-changes.outputs.plugin-changes }}"
+          zip -qr "../$ZIP_FILE" "${{ steps.plugin-dir.outputs.plugin-directory }}"
           echo "zip-file=$ZIP_FILE" >> $GITHUB_OUTPUT
 
       - name: Upload artifact
@@ -106,13 +103,14 @@ jobs:
 
       - name: Compare version numbers
         run: |
+          PLUGIN_DIR="${{ needs.package-plugin.outputs.plugin-directory }}"
           TEMP_ARTIFACT_DIR="/tmp/temp_artifact_${{ needs.package-plugin.outputs.timestamp }}"
           mkdir -p "$TEMP_ARTIFACT_DIR"
 
           unzip -q "/tmp/${{ needs.package-plugin.outputs.zip-file }}" -d "$TEMP_ARTIFACT_DIR"
 
-          artifact_file="$TEMP_ARTIFACT_DIR/${{ steps.filter.outputs.plugin-changes }}/version.php"
-          server_file="${{ env.MOODLE_PATH }}/mod/${{ steps.filter.outputs.plugin-changes }}/version.php"
+          artifact_file="$TEMP_ARTIFACT_DIR/$PLUGIN_DIR/version.php"
+          server_file="${{ env.MOODLE_PATH }}/mod/$PLUGIN_DIR/version.php"
 
           if [ ! -f "$artifact_file" ]; then
             echo "::error:: Artifact version file not found!"
@@ -138,12 +136,13 @@ jobs:
 
       - name: Backup current plugin directory
         run: |
+          PLUGIN_DIR="${{ needs.package-plugin.outputs.plugin-directory }}"
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-          PLUGIN_DIR="${{ env.MOODLE_PATH }}/mod/${{ steps.filter.outputs.plugin-changes }}"
-          BACKUP_FILE="/tmp/${{ steps.filter.outputs.plugin-changes }}-backup-${TIMESTAMP}.zip"
+          PLUGIN_DIR_PATH="${{ env.MOODLE_PATH }}/mod/$PLUGIN_DIR"
+          BACKUP_FILE="/tmp/$PLUGIN_DIR-backup-${TIMESTAMP}.zip"
 
-          if [ -d "$PLUGIN_DIR" ]; then
-            sudo zip -r "$BACKUP_FILE" "$PLUGIN_DIR"
+          if [ -d "$PLUGIN_DIR_PATH" ]; then
+            sudo zip -r "$BACKUP_FILE" "$PLUGIN_DIR_PATH"
             echo "Backup created at $BACKUP_FILE"
           else
             echo "No existing plugin directory found, skipping backup."
@@ -151,6 +150,7 @@ jobs:
 
       - name: Deploy to Moodle
         run: |
+          PLUGIN_DIR="${{ needs.package-plugin.outputs.plugin-directory }}"
           DEPLOY_DIR="${{ env.MOODLE_PATH }}/mod"
           sudo unzip -qo "/tmp/${{ needs.package-plugin.outputs.zip-file }}" -d "$DEPLOY_DIR"
-          sudo chown -R www-data:www-data "$DEPLOY_DIR/${{ steps.filter.outputs.plugin-changes }}"
+          sudo chown -R www-data:www-data "$DEPLOY_DIR/$PLUGIN_DIR"
