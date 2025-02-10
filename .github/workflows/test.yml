@@ -81,7 +81,7 @@ jobs:
       - name: Package Directory
         id: zip
         run: |
-          ZIP_FILE="${{ matrix.dir }}-${{ steps.timestamp.outputs.time }}.zip"
+          ZIP_FILE="${{ steps.timestamp.outputs.time }}.zip"
           if [ -d "${{ matrix.dir }}" ]; then
             zip -qr "$ZIP_FILE" "${{ matrix.dir }}"
           else
