@@ -46,10 +46,14 @@ jobs:
           echo "$plugins"
           # Remove duplicates
           plugins=$(echo "$plugins" | sort -u)
-          # Convert the list to a JSON array (one plugin per line)
-          json=$(printf '%s\n' "$plugins" | jq -R . | jq -s .)
+          # If plugins is empty, use an empty JSON array; otherwise, create a compact JSON array
+          if [[ -z "$plugins" ]]; then
+            json="[]"
+          else
+            json=$(printf '%s\n' "$plugins" | jq -R . | jq -s -c .)
+          fi
           echo "Detected plugins: $json"
-          echo "plugins=$json" >> $GITHUB_OUTPUT
+          echo "plugins=$json" >> "$GITHUB_OUTPUT"
 
   package:
     name: Package Changed Plugins
@@ -67,7 +71,7 @@ jobs:
 
       - name: Generate Timestamp
         id: timestamp
-        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
 
       - name: Package Plugin
         id: zip
@@ -80,7 +84,7 @@ jobs:
             echo "Directory mod/${{ matrix.plugin }} not found!"
             exit 1
           fi
-          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+          echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -105,9 +109,9 @@ jobs:
 
       - name: Determine Moodle Root Path
         run: |
-          # You can select the appropriate Moodle root based on branch if needed.
+          # Use the appropriate Moodle root; adjust as needed for branch logic
           MOODLE_PATH="/var/www/html/moodle"
-          echo "MOODLE_PATH=$MOODLE_PATH" >> $GITHUB_ENV
+          echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
       - name: Deploy Plugin
         run: |
