@@ -46,10 +46,11 @@ jobs:
           echo "$plugins"
           # Remove duplicates
           plugins=$(echo "$plugins" | sort -u)
-          # If plugins is empty, use an empty JSON array; otherwise, create a compact JSON array
+          # If no plugins detected, set json to []
           if [[ -z "$plugins" ]]; then
             json="[]"
           else
+            # Create a compact JSON array (single-line)
             json=$(printf '%s\n' "$plugins" | jq -R . | jq -s -c .)
           fi
           echo "Detected plugins: $json"
@@ -58,11 +59,12 @@ jobs:
   package:
     name: Package Changed Plugins
     needs: find-changed
-    if: ${{ needs.find-changed.outputs.plugins != '[]' }}
+    # Only run if plugins output is not empty and not an empty JSON array.
+    if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
-    runs-on: ubuntu-latest
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins == '' ? '[]' : needs.find-changed.outputs.plugins) }}
+    runs-on: self-hosted
     outputs:
       zip_file: ${{ steps.zip.outputs.zip_file }}
     steps:
@@ -96,10 +98,11 @@ jobs:
   deploy:
     name: Deploy Changed Plugins
     needs: package
+    if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
-    runs-on: ubuntu-latest
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins == '' ? '[]' : needs.find-changed.outputs.plugins) }}
+    runs-on: self-hosted
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
@@ -109,14 +112,14 @@ jobs:
 
       - name: Determine Moodle Root Path
         run: |
-          # Use the appropriate Moodle root; adjust as needed for branch logic
+          # Adjust Moodle root as necessary
           MOODLE_PATH="/var/www/html/moodle"
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
       - name: Deploy Plugin
         run: |
           DEPLOY_DIR="${{ env.MOODLE_PATH }}/mod"
-          # Find the zip file for this plugin in /tmp
+          # Locate the zip file for this plugin in /tmp
           ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "${{ matrix.plugin }}-*.zip")
           if [ -z "$ZIP_FILE" ]; then
             echo "Zip file not found for plugin ${{ matrix.plugin }}"
