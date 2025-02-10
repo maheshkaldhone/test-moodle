@@ -10,10 +10,6 @@ on:
         options:
           - main
           - dev
-      plugin-directory:
-        description: 'Plugin directory under mod/'
-        required: true
-        type: string
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
@@ -26,7 +22,7 @@ jobs:
     outputs:
       zip-file: ${{ steps.zip.outputs.zip-file }}
       timestamp: ${{ steps.timestamp.outputs.time }}
-      changed-files: ${{ steps.filter.outputs.changed_files }}
+      plugin-directory: ${{ steps.filter.outputs.changed_files }} # Output the changed plugin directory
 
     steps:
       - name: Checkout selected branch
@@ -34,22 +30,22 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch }}
 
+      - name: Paths Filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          list-files: json
+          filters: |
+            plugin-changes:
+              - 'mod/**'  # Assuming your plugin directories are under 'mod/'
+        
       - name: Validate plugin directory
         run: |
-          PLUGIN_PATH="mod/${{ github.event.inputs.plugin-directory }}"
+          PLUGIN_PATH="${{ steps.filter.outputs.plugin-changes_files }}"
           if [ ! -d "$PLUGIN_PATH" ]; then
             echo "::error:: Plugin directory '$PLUGIN_PATH' not found in ${{ github.event.inputs.branch }} branch!"
             exit 1
           fi
-
-      - name: Run paths-filter to detect changed files
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          list-files: json
-          filters: |
-            changed:
-              - 'mod/${{ github.event.inputs.plugin-directory }}/**'
 
       - name: Generate timestamp
         id: timestamp
@@ -58,9 +54,9 @@ jobs:
       - name: Create deployment package
         id: zip
         run: |
-          ZIP_FILE="${{ github.event.inputs.branch }}-${{ github.event.inputs.plugin-directory }}-${{ steps.timestamp.outputs.time }}.zip"
+          ZIP_FILE="${{ github.event.inputs.branch }}-${{ steps.filter.outputs.plugin-changes_files }}-${{ steps.timestamp.outputs.time }}.zip"
           cd mod
-          zip -qr "../$ZIP_FILE" "${{ github.event.inputs.plugin-directory }}"
+          zip -qr "../$ZIP_FILE" "${{ steps.filter.outputs.plugin-changes_files }}"
           echo "zip-file=$ZIP_FILE" >> $GITHUB_OUTPUT
 
       - name: Upload artifact
@@ -77,8 +73,8 @@ jobs:
       - self-hosted
       - Linux
       - X64
-      - ${{ github.event.inputs.branch == 'dev' && 'dev' || 'prod' }} # Ensures it runs on the correct runner
-    if: contains(fromJson('["dev", "main"]'), github.event.inputs.branch) && steps.filter.outputs.changed_files != '[]' # Deploy only if plugin files are changed
+      - ${{ github.event.inputs.branch == 'dev' && 'dev' || 'prod' }}
+    if: contains(fromJson('["dev", "main"]'), github.event.inputs.branch)
     environment:
       name: ${{ github.event.inputs.branch == 'main' && 'production' || 'development' }}
       url: ${{ github.event.inputs.branch == 'main' && 'http://moodle-lb-244874513.us-east-2.elb.amazonaws.com' || 'http://moodle-dev-lb-244874513.us-east-2.elb.amazonaws.com' }}
@@ -106,8 +102,8 @@ jobs:
 
           unzip -q "/tmp/${{ needs.package-plugin.outputs.zip-file }}" -d "$TEMP_ARTIFACT_DIR"
 
-          artifact_file="$TEMP_ARTIFACT_DIR/${{ github.event.inputs.plugin-directory }}/version.php"
-          server_file="${{ env.MOODLE_PATH }}/mod/${{ github.event.inputs.plugin-directory }}/version.php"
+          artifact_file="$TEMP_ARTIFACT_DIR/${{ steps.filter.outputs.plugin-changes_files }}/version.php"
+          server_file="${{ env.MOODLE_PATH }}/mod/${{ steps.filter.outputs.plugin-changes_files }}/version.php"
 
           if [ ! -f "$artifact_file" ]; then
             echo "::error:: Artifact version file not found!"
@@ -134,8 +130,8 @@ jobs:
       - name: Backup current plugin directory
         run: |
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-          PLUGIN_DIR="${{ env.MOODLE_PATH }}/mod/${{ github.event.inputs.plugin-directory }}"
-          BACKUP_FILE="/tmp/${{ github.event.inputs.plugin-directory }}-backup-${TIMESTAMP}.zip"
+          PLUGIN_DIR="${{ env.MOODLE_PATH }}/mod/${{ steps.filter.outputs.plugin-changes_files }}"
+          BACKUP_FILE="/tmp/${{ steps.filter.outputs.plugin-changes_files }}-backup-${TIMESTAMP}.zip"
 
           if [ -d "$PLUGIN_DIR" ]; then
             sudo zip -r "$BACKUP_FILE" "$PLUGIN_DIR"
@@ -148,5 +144,4 @@ jobs:
         run: |
           DEPLOY_DIR="${{ env.MOODLE_PATH }}/mod"
           sudo unzip -qo "/tmp/${{ needs.package-plugin.outputs.zip-file }}" -d "$DEPLOY_DIR"
-
-          sudo chown -R www-data:www-data "$DEPLOY_DIR/${{ github.event.inputs.plugin-directory }}"
+          sudo chown -R www-data:www-data "$DEPLOY_DIR/${{ steps.filter.outputs.plugin-changes_files }}"
