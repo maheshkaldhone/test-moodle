@@ -63,7 +63,7 @@ jobs:
     if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins == '' ? '[]' : needs.find-changed.outputs.plugins) }}
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
     runs-on: self-hosted
     outputs:
       zip_file: ${{ steps.zip.outputs.zip_file }}
@@ -101,7 +101,7 @@ jobs:
     if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins == '' ? '[]' : needs.find-changed.outputs.plugins) }}
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
     runs-on: self-hosted
     steps:
       - name: Download Artifact
@@ -112,7 +112,7 @@ jobs:
 
       - name: Determine Moodle Root Path
         run: |
-          # Adjust Moodle root as necessary
+          # Use the appropriate Moodle root; adjust as needed for branch logic
           MOODLE_PATH="/var/www/html/moodle"
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
