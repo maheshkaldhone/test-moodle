@@ -1,4 +1,4 @@
-name: Auto Plugin Deployment Test
+name: Auto Plugin Deployment
 
 on:
   push:
@@ -12,10 +12,6 @@ on:
         required: false
         type: string
         default: ""
-      plugin-directory:
-        description: 'Plugin directory under mod/ (override auto‑detection)'
-        required: false
-        type: string
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
@@ -23,15 +19,15 @@ env:
 
 jobs:
   find-changed:
-    name: Find Changed Plugin Directories
+    name: Find Changed Directories
     runs-on: ubuntu-latest
     outputs:
-      plugins: ${{ steps.list_plugins.outputs.plugins }}
+      changed_dirs: ${{ steps.list_dirs.outputs.changed_dirs }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Detect changes in mod folder
+      - name: Detect changes in specified directories
         id: filter
         uses: dorny/paths-filter@v3
         with:
@@ -40,33 +36,38 @@ jobs:
             mod:
               - "mod/**"
 
-      - name: Extract changed plugin directories
-        id: list_plugins
+      - name: Extract changed directories
+        id: list_dirs
         run: |
-          # Safely parse JSON array using jq
-          PLUGINS_JSON="${{ steps.filter.outputs.mod_files }}"
-          
-          # Extract plugin directories (e.g., "attendance" from "mod/attendance/file.php")
-          PLUGIN_DIRS=$(echo "$PLUGINS_JSON" | jq -r 'map(split("/")[1]) | unique | .[]' 2>/dev/null)
-          
-          # Convert to JSON array
-          if [[ -z "$PLUGIN_DIRS" ]]; then
-            JSON_PLUGINS="[]"
+          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}, ${{ steps.filter.outputs.auth_files }}, ${{ steps.filter.outputs.block_files }}, ${{ steps.filter.outputs.customfield_files }}, ${{ steps.filter.outputs.enrol_files }}, ${{ steps.filter.outputs.local_files }}, ${{ steps.filter.outputs.theme_files }}, ${{ steps.filter.outputs.tool_files }}"
+          # Combine all changed files
+          all_changed_files="${{ steps.filter.outputs.mod_files }} ${{ steps.filter.outputs.auth_files }} ${{ steps.filter.outputs.block_files }} ${{ steps.filter.outputs.customfield_files }} ${{ steps.filter.outputs.enrol_files }} ${{ steps.filter.outputs.local_files }} ${{ steps.filter.outputs.theme_files }} ${{ steps.filter.outputs.tool_files }}"
+          # Remove square brackets, split by comma, trim spaces, and extract the first folder
+          dirs=$(echo "$all_changed_files" \
+                  | sed 's/[][]//g' \
+                  | tr ',' '\n' \
+                  | sed 's/^ *//; s/ *$//' \
+                  | sed -E 's|^([^/]+/[^/]+).*|\1|' \
+                  | sort -u)
+          echo "Raw detected directories:"
+          echo "$dirs"
+          # Create a compact JSON array (single-line)
+          if [[ -z "$dirs" ]]; then
+            json="[]"
           else
-            JSON_PLUGINS=$(echo "$PLUGIN_DIRS" | jq -R . | jq -s -c .)
+            json=$(printf '%s\n' "$dirs" | jq -R . | jq -s -c .)
           fi
-          
-          echo "Detected plugins: $JSON_PLUGINS"
-          echo "plugins=$JSON_PLUGINS" >> "$GITHUB_OUTPUT"
+          echo "Detected directories: $json"
+          echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
 
   package:
-    name: Package Changed Plugins
+    name: Package Changed Directories
     needs: find-changed
-    if: ${{ needs.find-changed.outputs.plugins != '[]' }}
+    if: ${{ needs.find-changed.outputs.changed_dirs != '' && needs.find-changed.outputs.changed_dirs != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
-    runs-on: self-hosted
+        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+    runs-on: ubuntu-latest
     outputs:
       zip_file: ${{ steps.zip.outputs.zip_file }}
     steps:
@@ -77,15 +78,14 @@ jobs:
         id: timestamp
         run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
 
-      - name: Package Plugin
+      - name: Package Directory
         id: zip
         run: |
-          ZIP_FILE="${{ matrix.plugin }}-${{ steps.timestamp.outputs.time }}.zip"
-          cd mod
-          if [ -d "${{ matrix.plugin }}" ]; then
-            zip -qr "../$ZIP_FILE" "${{ matrix.plugin }}"
+          ZIP_FILE="${{ matrix.dir }}-${{ steps.timestamp.outputs.time }}.zip"
+          if [ -d "${{ matrix.dir }}" ]; then
+            zip -qr "$ZIP_FILE" "${{ matrix.dir }}"
           else
-            echo "Directory mod/${{ matrix.plugin }} not found!"
+            echo "Directory ${{ matrix.dir }} not found!"
             exit 1
           fi
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
@@ -93,30 +93,23 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: plugin-package-${{ matrix.plugin }}
+          name: deployment-package-${{ matrix.dir }}
           path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
 
   deploy:
-    name: Deploy to Instance
+    name: Deploy to Moodle Instance
     needs: package
-    if: ${{ needs.find-changed.outputs.plugins != '[]' }}
+    if: ${{ needs.find-changed.outputs.changed_dirs != '' && needs.find-changed.outputs.changed_dirs != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
-    runs-on:
-      - self-hosted
-      - Linux
-      - X64
-      - ${{ (github.event.inputs.branch || github.ref_name) == 'dev' && 'dev' || 'prod' }}
-    environment:
-      name: ${{ (github.event.inputs.branch || github.ref_name) == 'main' && 'production' || 'development' }}
-      url: ${{ (github.event.inputs.branch || github.ref_name) == 'main' && 'http://moodle-lb-244874513.us-east-2.elb.amazonaws.com' || 'http://moodle-dev-lb-244874513.us-east-2.elb.amazonaws.com' }}
+        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+    runs-on: self-hosted
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: plugin-package-${{ matrix.plugin }}
+          name: deployment-package-${{ matrix.dir }}
           path: /tmp
 
       - name: Determine Moodle Root Path
@@ -130,47 +123,21 @@ jobs:
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
-      - name: Compare version numbers
-        run: |
-          TEMP_ARTIFACT_DIR="/tmp/temp_artifact_${{ steps.timestamp.outputs.time }}"
-          mkdir -p "$TEMP_ARTIFACT_DIR"
-          ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "${{ matrix.plugin }}-*.zip")
-          unzip -q "$ZIP_FILE" -d "$TEMP_ARTIFACT_DIR"
-          artifact_file="$TEMP_ARTIFACT_DIR/${{ matrix.plugin }}/version.php"
-          server_file="${{ env.MOODLE_PATH }}/mod/${{ matrix.plugin }}/version.php"
-          if [ ! -f "$artifact_file" ]; then
-            echo "::error:: Artifact version file not found!"
-            exit 1
-          fi
-          ver_artifact=$(grep '\$plugin->version' "$artifact_file" | awk -F'=' '{print $2}' | tr -d " ;")
-          echo "Artifact version: $ver_artifact"
-          if [ -f "$server_file" ]; then
-            ver_server=$(grep '\$plugin->version' "$server_file" | awk -F'=' '{print $2}' | tr -d " ;")
-            echo "Server version: $ver_server"
-            if [ "$ver_server" -gt "$ver_artifact" ]; then
-              echo "::error:: Server version ($ver_server) is greater than artifact version ($ver_artifact). Deployment aborted."
-              exit 1
-            fi
-          else
-            echo "Server version file not found, proceeding."
-          fi
-          rm -rf "$TEMP_ARTIFACT_DIR"
-
-      - name: Backup current plugin directory
+      - name: Backup current directory
         run: |
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-          PLUGIN_DIR="${{ env.MOODLE_PATH }}/mod/${{ matrix.plugin }}"
-          BACKUP_FILE="/tmp/${{ matrix.plugin }}-backup-${TIMESTAMP}.zip"
-          if [ -d "$PLUGIN_DIR" ]; then
-            sudo zip -r "$BACKUP_FILE" "$PLUGIN_DIR"
+          TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
+          BACKUP_FILE="/tmp/${{ matrix.dir }}-backup-${TIMESTAMP}.zip"
+          if [ -d "$TARGET_DIR" ]; then
+            sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
             echo "Backup created at $BACKUP_FILE"
           else
-            echo "No existing plugin directory found, skipping backup."
+            echo "No existing directory found at $TARGET_DIR, skipping backup."
           fi
 
       - name: Deploy to Moodle
         run: |
-          DEPLOY_DIR="${{ env.MOODLE_PATH }}/mod"
-          ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "${{ matrix.plugin }}-*.zip")
+          DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
+          ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "${{ matrix.dir }}-*.zip")
           sudo unzip -qo "$ZIP_FILE" -d "$DEPLOY_DIR"
-          sudo chown -R www-data:www-data "$DEPLOY_DIR/${{ matrix.plugin }}"
+          sudo chown -R www-data:www-data "$DEPLOY_DIR/$(basename ${{ matrix.dir }})"
