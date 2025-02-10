@@ -45,7 +45,7 @@ jobs:
     name: Deploy Changed Plugins
     needs: find-changed
     # Only run if at least one plugin was changed
-    if: ${{ fromJson(needs.find-changed.outputs.plugins) != [] }}
+    if: ${{ needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
         plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
