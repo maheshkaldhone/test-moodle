@@ -12,7 +12,6 @@ on:
         required: false
         type: string
         default: ""
-      # Optionally, you could add a plugin-directory input to override auto‑detection
       plugin-directory:
         description: 'Plugin directory under mod/ (override auto‑detection)'
         required: false
@@ -72,7 +71,7 @@ jobs:
     if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' ? needs.find-changed.outputs.plugins : '[]') }}
     runs-on: self-hosted
     outputs:
       zip_file: ${{ steps.zip.outputs.zip_file }}
@@ -110,7 +109,7 @@ jobs:
     if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' ? needs.find-changed.outputs.plugins : '[]') }}
     runs-on:
       - self-hosted
       - Linux
