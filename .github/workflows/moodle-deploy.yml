@@ -22,11 +22,12 @@ jobs:
     outputs:
       zip-file: ${{ steps.zip.outputs.zip-file }}
       timestamp: ${{ steps.timestamp.outputs.time }}
-      plugin-directory: ${{ steps.filter-plugin-changes.outputs.plugin-changes }}  # Corrected to reference the second filter output
+      plugin-directory: ${{ steps.filter-plugin-changes.outputs.plugin-changes }} 
 
     steps:
       - uses: actions/checkout@v4
-
+      - name: Fetch all commits
+        run: git fetch --prune --unshallow
       - uses: dorny/paths-filter@v3
         id: filter-mod-changes
         with:
@@ -78,7 +79,7 @@ jobs:
     if: contains(fromJson('["dev", "main"]'), github.event.inputs.branch)
     environment:
       name: ${{ github.event.inputs.branch == 'main' && 'production' || 'development' }}
-      url: ${{ github.event.inputs.branch == 'main' && 'http://moodle-lb-244874513.us-east-2.elb.amazonaws.com' || 'http://moodle-dev-lb-244874513.us-east-2.elb.amazonaws.com' }}
+    # url: ${{ github.event.inputs.branch == 'main' && 'http://moodle-lb-244874513.us-east-2.elb.amazonaws.com' || 'http://moodle-dev-lb-244874513.us-east-2.elb.amazonaws.com' }}
 
     steps:
       - name: Download artifact
