@@ -43,31 +43,26 @@ jobs:
       - name: Extract changed plugin directories
         id: list_plugins
         run: |
-          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
-          # Remove square brackets, split by comma, trim spaces, and extract the first folder after "mod/"
-          plugins=$(echo "${{ steps.filter.outputs.mod_files }}" \
-                     | sed 's/[][]//g' \
-                     | tr ',' '\n' \
-                     | sed 's/^ *//; s/ *$//' \
-                     | sed -E 's/^mod\/([^/]+).*/\1/')
-          echo "Raw detected plugin directories:"
-          echo "$plugins"
-          # Remove duplicates
-          plugins=$(echo "$plugins" | sort -u)
-          # If no plugins detected, set json to []
-          if [[ -z "$plugins" ]]; then
-            json="[]"
+          # Safely parse JSON array using jq
+          PLUGINS_JSON="${{ steps.filter.outputs.mod_files }}"
+          
+          # Extract plugin directories (e.g., "attendance" from "mod/attendance/file.php")
+          PLUGIN_DIRS=$(echo "$PLUGINS_JSON" | jq -r 'map(split("/")[1]) | unique | .[]' 2>/dev/null)
+          
+          # Convert to JSON array
+          if [[ -z "$PLUGIN_DIRS" ]]; then
+            JSON_PLUGINS="[]"
           else
-            # Create a compact JSON array (single-line)
-            json=$(printf '%s\n' "$plugins" | jq -R . | jq -s -c .)
+            JSON_PLUGINS=$(echo "$PLUGIN_DIRS" | jq -R . | jq -s -c .)
           fi
-          echo "Detected plugins: $json"
-          echo "plugins=$json" >> "$GITHUB_OUTPUT"
+          
+          echo "Detected plugins: $JSON_PLUGINS"
+          echo "plugins=$JSON_PLUGINS" >> "$GITHUB_OUTPUT"
 
   package:
     name: Package Changed Plugins
     needs: find-changed
-    if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
+    if: ${{ needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
         plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
@@ -105,7 +100,7 @@ jobs:
   deploy:
     name: Deploy to Instance
     needs: package
-    if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
+    if: ${{ needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
         plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
@@ -139,7 +134,6 @@ jobs:
         run: |
           TEMP_ARTIFACT_DIR="/tmp/temp_artifact_${{ steps.timestamp.outputs.time }}"
           mkdir -p "$TEMP_ARTIFACT_DIR"
-          # Locate the downloaded zip file for this plugin
           ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "${{ matrix.plugin }}-*.zip")
           unzip -q "$ZIP_FILE" -d "$TEMP_ARTIFACT_DIR"
           artifact_file="$TEMP_ARTIFACT_DIR/${{ matrix.plugin }}/version.php"
