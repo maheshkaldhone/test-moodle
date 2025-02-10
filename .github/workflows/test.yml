@@ -1,4 +1,4 @@
-name: Auto Plugin Deployment
+name: Auto Plugin Deployment Test
 
 on:
   push:
