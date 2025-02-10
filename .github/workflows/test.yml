@@ -67,11 +67,10 @@ jobs:
   package:
     name: Package Changed Plugins
     needs: find-changed
-    # Only run if plugins output is not empty and not an empty JSON array.
     if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' ? needs.find-changed.outputs.plugins : '[]') }}
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
     runs-on: self-hosted
     outputs:
       zip_file: ${{ steps.zip.outputs.zip_file }}
@@ -109,7 +108,7 @@ jobs:
     if: ${{ needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' }}
     strategy:
       matrix:
-        plugin: ${{ fromJson(needs.find-changed.outputs.plugins != '' && needs.find-changed.outputs.plugins != '[]' ? needs.find-changed.outputs.plugins : '[]') }}
+        plugin: ${{ fromJson(needs.find-changed.outputs.plugins) }}
     runs-on:
       - self-hosted
       - Linux
