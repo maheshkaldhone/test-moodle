@@ -82,21 +82,26 @@ jobs:
         run: |
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           ZIP_FILE="${SAFE_NAME}-${{ steps.timestamp.outputs.time }}.zip"
-          if [ -d "${{ matrix.dir }}" ]; then
-            zip -qr "$ZIP_FILE" "${{ matrix.dir }}"
-          else
-            echo "Directory ${{ matrix.dir }} not found!"
-            exit 1
-          fi
+          
+          # Extract just the last directory name
+          BASE_DIR=$(basename "${{ matrix.dir }}")
+      
+          # Create ZIP containing only the BASE_DIR and its contents
+          cd "$(dirname "${{ matrix.dir }}")"
+          zip -qr "../$ZIP_FILE" "$BASE_DIR"
+          cd -
+      
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
       
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-package-${{ steps.zip.outputs.safe_name }} 
-          path: ${{ steps.zip.outputs.zip_file }}
-          retention-days: 5
+      
+          - name: Upload Artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: deployment-package-${{ steps.zip.outputs.safe_name }} 
+            path: "./${{ steps.zip.outputs.zip_file }}"
+            retention-days: 5
+        
 
   deploy:
     name: Deploy to Moodle Instance
