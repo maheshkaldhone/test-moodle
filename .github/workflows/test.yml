@@ -65,7 +65,7 @@ jobs:
     if: ${{ needs.find-changed.outputs.changed_dirs != '[]' && needs.find-changed.outputs.changed_dirs != '' }}
     strategy:
       matrix:
-        dir: ${{ (needs.find-changed.outputs.changed_dirs != '' && fromJson(needs.find-changed.outputs.changed_dirs)) || [] }}
+        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
     runs-on: ubuntu-latest
     outputs:
       zip_file: ${{ steps.zip.outputs.zip_file }}
@@ -98,7 +98,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: deployment-package-${{ steps.zip.outputs.safe_name }}
-          path: ${{ steps.zip.outputs.zip_file }}  # Correct ZIP path
+          path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
       
   deploy:
@@ -106,8 +106,8 @@ jobs:
     needs: package
     if: ${{ needs.find-changed.outputs.changed_dirs != '[]' && needs.find-changed.outputs.changed_dirs != '' }}
     strategy:
-     matrix:
-       dir: ${{ (needs.find-changed.outputs.changed_dirs != '' && fromJson(needs.find-changed.outputs.changed_dirs)) || [] }}
+       matrix:
+         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
     runs-on: self-hosted
     steps:
       - name: Download Artifact
