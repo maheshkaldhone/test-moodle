@@ -118,7 +118,7 @@ jobs:
     if: ${{ needs.find-changed.outputs.changed_dirs != '[]' && needs.find-changed.outputs.changed_dirs != '' }}
     strategy:
       matrix:
-        dir: ${{ (needs.find-changed.outputs.changed_dirs && fromJson(needs.find-changed.outputs.changed_dirs)) || [] }}
+        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
     runs-on: self-hosted
     steps:
       - name: Download Artifact
