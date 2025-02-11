@@ -1,6 +1,10 @@
 name: Auto Plugin Deployment
 
 on:
+  push:
+    branches:
+      - main
+      - dev
   workflow_dispatch:
     inputs:
       branch:
@@ -120,7 +124,6 @@ jobs:
             *) MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
-
       - name: Backup current directory
         run: |
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
