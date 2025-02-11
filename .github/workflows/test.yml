@@ -15,7 +15,6 @@ on:
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
-  DEV_MOODLE_ROOT: /var/www/html/moodle_dev
 
 jobs:
   find-changed:
@@ -53,16 +52,16 @@ jobs:
       - name: Extract changed directories
         id: list_dirs
         run: |
-          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}, ${{ steps.filter.outputs.auth_files }}, ${{ steps.filter.outputs.block_files }}, ${{ steps.filter.outputs.customfield_files }}, ${{ steps.filter.outputs.enrol_files }}, ${{ steps.filter.outputs.local_files }}, ${{ steps.filter.outputs.theme_files }}, ${{ steps.filter.outputs.tool_files }}"
+          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
           # Combine all changed files
-          all_changed_files="${{ steps.filter.outputs.mod_files }} ${{ steps.filter.outputs.auth_files }} ${{ steps.filter.outputs.block_files }} ${{ steps.filter.outputs.customfield_files }} ${{ steps.filter.outputs.enrol_files }} ${{ steps.filter.outputs.local_files }} ${{ steps.filter.outputs.theme_files }} ${{ steps.filter.outputs.tool_files }}"
+          all_changed_files="${{ steps.filter.outputs.mod_files }}"
           # Remove square brackets, split by comma, trim spaces, and extract the first folder
           dirs=$(echo "$all_changed_files" \
-                  | sed 's/[][]//g' \
-                  | tr ',' '\n' \
-                  | sed 's/^ *//; s/ *$//' \
-                  | sed -E 's|^([^/]+/[^/]+).*|\1|' \
-                  | sort -u)
+            | sed 's/[][]//g' \
+            | tr ',' '\n' \
+            | sed 's/^ *//; s/ *$//' \
+            | sed -E 's|^([^/]+/[^/]+).*|\1|' \
+            | sort -u)
           echo "Raw detected directories:"
           echo "$dirs"
           # Create a compact JSON array (single-line)
@@ -105,11 +104,11 @@ jobs:
           fi
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
-      
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-package-${{ steps.zip.outputs.safe_name }} 
+          name: deployment-package-${{ steps.zip.outputs.safe_name }}
           path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
 
@@ -135,7 +134,7 @@ jobs:
           case "$branch" in
             dev)  MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
             main) MOODLE_PATH=${{ env.PROD_MOODLE_ROOT }} ;;
-            *) MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
+            *)    MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
