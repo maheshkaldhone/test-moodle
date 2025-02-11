@@ -115,10 +115,10 @@ jobs:
   deploy:
     name: Deploy to Moodle Instance
     needs: package
-    if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
-    strategy:
-      matrix:
-        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+    # if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
+    # strategy:
+    #   matrix:
+    #     dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
     runs-on: self-hosted
     steps:
       - name: Download Artifact
