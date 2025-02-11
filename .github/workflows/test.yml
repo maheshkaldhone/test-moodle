@@ -1,10 +1,6 @@
 name: Auto Plugin Deployment
 
 on:
-  push:
-    branches:
-      - main
-      - dev
   workflow_dispatch:
     inputs:
       branch:
@@ -35,26 +31,13 @@ jobs:
           filters: |
             mod:
               - "mod/**"
-            auth:
-              - "auth/**"
-            block:
-              - "block/**"
-            customfield:
-              - "customfield/**"
-            enrol:
-              - "enrol/**"
-            local:
-              - "local/**"
-            theme:
-              - "theme/**"
-            tool:
-              - "tool/**"
+
       - name: Extract changed directories
         id: list_dirs
         run: |
-          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}, ${{ steps.filter.outputs.auth_files }}, ${{ steps.filter.outputs.block_files }}, ${{ steps.filter.outputs.customfield_files }}, ${{ steps.filter.outputs.enrol_files }}, ${{ steps.filter.outputs.local_files }}, ${{ steps.filter.outputs.theme_files }}, ${{ steps.filter.outputs.tool_files }}"
+          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
           # Combine all changed files
-          all_changed_files="${{ steps.filter.outputs.mod_files }} ${{ steps.filter.outputs.auth_files }} ${{ steps.filter.outputs.block_files }} ${{ steps.filter.outputs.customfield_files }} ${{ steps.filter.outputs.enrol_files }} ${{ steps.filter.outputs.local_files }} ${{ steps.filter.outputs.theme_files }} ${{ steps.filter.outputs.tool_files }}"
+          all_changed_files="${{ steps.filter.outputs.mod_files }}"
           # Remove square brackets, split by comma, trim spaces, and extract the first folder
           dirs=$(echo "$all_changed_files" \
                   | sed 's/[][]//g' \
