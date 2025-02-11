@@ -81,8 +81,8 @@ jobs:
         id: zip
         run: |
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
-          ZIP_FILE="${SAFE_NAME}-${{ steps.timestamp.outputs.time }}.zip"
-          
+          ZIP_FILE="${SAFE_NAME}-$(date +'%Y%m%d-%H%M%S').zip"
+      
           # Extract just the last directory name
           BASE_DIR=$(basename "${{ matrix.dir }}")
       
@@ -94,13 +94,13 @@ jobs:
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
       
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-package-${{ steps.zip.outputs.safe_name }}
+          path: ${{ steps.zip.outputs.zip_file }}  # Correct ZIP path
+          retention-days: 5
       
-          - name: Upload Artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: deployment-package-${{ steps.zip.outputs.safe_name }} 
-            path: "./${{ steps.zip.outputs.zip_file }}"
-            retention-days: 5
         
 
   deploy:
