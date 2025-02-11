@@ -49,23 +49,22 @@ jobs:
               - "theme/**"
             tool:
               - "tool/**"
-
       - name: Extract changed directories
         id: list_dirs
         run: |
-          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
-          # Combine changed files (adjust if you need more than mod files)
-          all_changed_files="${{ steps.filter.outputs.mod_files }}"
-          # Remove brackets, split by comma, trim spaces, and extract the first folder path
+          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}, ${{ steps.filter.outputs.auth_files }}, ${{ steps.filter.outputs.block_files }}, ${{ steps.filter.outputs.customfield_files }}, ${{ steps.filter.outputs.enrol_files }}, ${{ steps.filter.outputs.local_files }}, ${{ steps.filter.outputs.theme_files }}, ${{ steps.filter.outputs.tool_files }}"
+          # Combine all changed files
+          all_changed_files="${{ steps.filter.outputs.mod_files }} ${{ steps.filter.outputs.auth_files }} ${{ steps.filter.outputs.block_files }} ${{ steps.filter.outputs.customfield_files }} ${{ steps.filter.outputs.enrol_files }} ${{ steps.filter.outputs.local_files }} ${{ steps.filter.outputs.theme_files }} ${{ steps.filter.outputs.tool_files }}"
+          # Remove square brackets, split by comma, trim spaces, and extract the first folder
           dirs=$(echo "$all_changed_files" \
-            | sed 's/[][]//g' \
-            | tr ',' '\n' \
-            | sed 's/^ *//; s/ *$//' \
-            | sed -E 's|^([^/]+/[^/]+).*|\1|' \
-            | sort -u)
+                  | sed 's/[][]//g' \
+                  | tr ',' '\n' \
+                  | sed 's/^ *//; s/ *$//' \
+                  | sed -E 's|^([^/]+/[^/]+).*|\1|' \
+                  | sort -u)
           echo "Raw detected directories:"
           echo "$dirs"
-          # Always output a valid JSON array; if no directories, use []
+          # Create a compact JSON array (single-line)
           if [[ -z "$dirs" ]]; then
             json="[]"
           else
@@ -73,7 +72,6 @@ jobs:
           fi
           echo "Detected directories: $json"
           echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
-
   package:
     name: Package Changed Directories
     needs: find-changed
@@ -95,7 +93,6 @@ jobs:
       - name: Package Directory
         id: zip
         run: |
-          # Compute a safe name from the changed directory (e.g. mod-activity)
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           ZIP_FILE="${SAFE_NAME}-${{ steps.timestamp.outputs.time }}.zip"
           if [ -d "${{ matrix.dir }}" ]; then
@@ -106,19 +103,18 @@ jobs:
           fi
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
-
+      
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          # Use a consistent name based on the changed directory
-          name: deployment-package-${{ matrix.dir }}
+          name: deployment-package-${{ steps.zip.outputs.safe_name }} 
           path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
 
   deploy:
     name: Deploy to Moodle Instance
     needs: package
-    if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
+    #if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
     strategy:
       matrix:
         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
@@ -127,7 +123,6 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          # Use the same artifact name as uploaded
           name: deployment-package-${{ matrix.dir }}
           path: /tmp
 
@@ -138,7 +133,7 @@ jobs:
           case "$branch" in
             dev)  MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
             main) MOODLE_PATH=${{ env.PROD_MOODLE_ROOT }} ;;
-            *)    MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
+            *) MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
@@ -153,7 +148,7 @@ jobs:
           else
             echo "No existing directory found at $TARGET_DIR, skipping backup."
           fi
-
+          
       - name: Deploy to Moodle
         run: |
           DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
