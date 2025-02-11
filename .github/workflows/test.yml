@@ -103,7 +103,7 @@ jobs:
       
   deploy:
     name: Deploy to Moodle Instance
-    needs: package
+    needs: [find-changed, package]  
     if: ${{ needs.find-changed.outputs.changed_dirs != '[]' && needs.find-changed.outputs.changed_dirs != '' }}
     strategy:
        matrix:
@@ -126,6 +126,7 @@ jobs:
             *) MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
+
       - name: Backup current directory
         run: |
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
