@@ -120,72 +120,26 @@ jobs:
         with:
           name: deployment-package-${{ steps.zip.outputs.safe_name }} 
           path: ${{ steps.zip.outputs.zip_file }}
-          retention-days: 5
-      
+          retention-days: 5    
 
-#   deploy:
-#     name: Deploy to Moodle Instance
-#     needs: package
-#     if: ${{ needs.find-changed.outputs.changed_dirs != '' && needs.find-changed.outputs.changed_dirs != '[]' }}
-#     strategy:
-#       matrix:
-#         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
-#     runs-on: self-hosted
-#     steps:
-#       - name: Download Artifact
-#         uses: actions/download-artifact@v4
-#         with:
-#           name: deployment-package-${{ matrix.dir }}
-#           path: /tmp
-
-#       - name: Determine Moodle Root Path
-#         id: determine-path
-#         run: |
-#           branch="${{ github.event.inputs.branch || github.ref_name }}"
-#           case "$branch" in
-#             dev)  MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
-#             main) MOODLE_PATH=${{ env.PROD_MOODLE_ROOT }} ;;
-#             *) MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
-#           esac
-#           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
-
-#       - name: Backup current directory
-#         run: |
-#           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-#           TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
-#           BACKUP_FILE="/tmp/${{ matrix.dir }}-backup-${TIMESTAMP}.zip"
-#           if [ -d "$TARGET_DIR" ]; then
-#             sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
-#             echo "Backup created at $BACKUP_FILE"
-#           else
-#             echo "No existing directory found at $TARGET_DIR, skipping backup."
-#           fi
-
-#       - name: Deploy to Moodle
-#         run: |
-#           DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
-#           ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "${{ matrix.dir }}-*.zip")
-#           sudo unzip -qo "$ZIP_FILE" -d "$DEPLOY_DIR"
-#           sudo chown -R www-data:www-data "$DEPLOY_DIR/$(basename ${{ matrix.dir }})"
-
-   deploy:
-       name: Deploy to Moodle Instance
-       needs: package
-       if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
-       strategy:
-       matrix:
-         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
-       runs-on: self-hosted
-       steps:
-       - name: Download Artifact
-         uses: actions/download-artifact@v4
-         with:
+    deploy:
+      name: Deploy to Moodle Instance
+      needs: package
+      if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
+      strategy:
+         matrix:
+           dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+      runs-on: self-hosted
+      steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
            name: deployment-package-${{ matrix.dir }}
            path: /tmp
 
-       - name: Determine Moodle Root Path
-         id: determine-path
-         run: |
+      - name: Determine Moodle Root Path
+        id: determine-path
+        run: |
           branch="${{ github.event.inputs.branch || github.ref_name }}"
           case "$branch" in
           dev)  MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
@@ -194,8 +148,8 @@ jobs:
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
-       - name: Backup current directory
-         run: |
+      - name: Backup current directory
+        run: |
           TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
           TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
           BACKUP_FILE="/tmp/${{ matrix.dir }}-backup-${TIMESTAMP}.zip"
@@ -206,8 +160,8 @@ jobs:
             echo "No existing directory found at $TARGET_DIR, skipping backup."
           fi
 
-       - name: Deploy to Moodle
-         run: |
+      - name: Deploy to Moodle
+        run: |
           DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
           ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "${{ matrix.dir }}-*.zip")
           sudo unzip -qo "$ZIP_FILE" -d "$DEPLOY_DIR"
