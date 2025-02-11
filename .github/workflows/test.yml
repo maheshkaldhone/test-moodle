@@ -15,6 +15,7 @@ on:
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
+  DEV_MOODLE_ROOT: /var/www/html/moodle_dev
 
 jobs:
   find-changed:
@@ -53,9 +54,9 @@ jobs:
         id: list_dirs
         run: |
           echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
-          # Combine all changed files
+          # Combine changed files (adjust if you need more than mod files)
           all_changed_files="${{ steps.filter.outputs.mod_files }}"
-          # Remove square brackets, split by comma, trim spaces, and extract the first folder
+          # Remove brackets, split by comma, trim spaces, and extract the first folder path
           dirs=$(echo "$all_changed_files" \
             | sed 's/[][]//g' \
             | tr ',' '\n' \
@@ -64,7 +65,7 @@ jobs:
             | sort -u)
           echo "Raw detected directories:"
           echo "$dirs"
-          # Create a compact JSON array (single-line)
+          # Always output a valid JSON array; if no directories, use []
           if [[ -z "$dirs" ]]; then
             json="[]"
           else
@@ -94,6 +95,7 @@ jobs:
       - name: Package Directory
         id: zip
         run: |
+          # Compute a safe name from the changed directory (e.g. mod-activity)
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           ZIP_FILE="${SAFE_NAME}-${{ steps.timestamp.outputs.time }}.zip"
           if [ -d "${{ matrix.dir }}" ]; then
@@ -105,33 +107,28 @@ jobs:
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
 
-    #   - name: Upload Artifact
-    #     uses: actions/upload-artifact@v4
-    #     with:
-    #       name: deployment-package-${{ steps.zip.outputs.safe_name }}
-    #       path: ${{ steps.zip.outputs.zip_file }}
-    #       retention-days: 5
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-            name: deployment-package-${{ matrix.dir }}
-            path: ${{ steps.zip.outputs.zip_file }}
-            retention-days: 5
-        
-        
+          # Use a consistent name based on the changed directory
+          name: deployment-package-${{ matrix.dir }}
+          path: ${{ steps.zip.outputs.zip_file }}
+          retention-days: 5
+
   deploy:
     name: Deploy to Moodle Instance
     needs: package
-    # if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
-    # strategy:
-    #   matrix:
-    #     dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+    if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
+    strategy:
+      matrix:
+        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
     runs-on: self-hosted
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: deployment-package-${{ steps.zip.outputs.safe_name }}
+          # Use the same artifact name as uploaded
+          name: deployment-package-${{ matrix.dir }}
           path: /tmp
 
       - name: Determine Moodle Root Path
