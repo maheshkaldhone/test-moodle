@@ -15,7 +15,6 @@ on:
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
-  DEV_MOODLE_ROOT: /var/www/html/moodle_dev
 
 jobs:
   find-changed:
@@ -103,9 +102,9 @@ jobs:
     name: Deploy to Moodle Instance
     needs: package
     if: ${{ needs.find-changed.outputs.changed_dirs != '[]' && needs.find-changed.outputs.changed_dirs != '' }}
-    strategy:
-      matrix:
-        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+    # strategy:
+    #   matrix:
+    #     dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
     runs-on: self-hosted
     steps:
       - name: Download Artifact
