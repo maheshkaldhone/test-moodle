@@ -15,6 +15,7 @@ on:
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
+  DEV_MOODLE_ROOT: /var/www/html/moodle_dev
 
 jobs:
   find-changed:
@@ -34,59 +35,49 @@ jobs:
           filters: |
             mod:
               - "mod/**"
-
-    #   - name: Extract changed directories
-    #     id: list_dirs
-    #     run: |
-    #       echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
-    #       # Combine all changed files
-    #       all_changed_files="${{ steps.filter.outputs.mod_files }}"
-    #       # Remove square brackets, split by comma, trim spaces, and extract the first folder
-    #       dirs=$(echo "$all_changed_files" \
-    #               | sed 's/[][]//g' \
-    #               | tr ',' '\n' \
-    #               | sed 's/^ *//; s/ *$//' \
-    #               | sed -E 's|^([^/]+/[^/]+).*|\1|' \
-    #               | sort -u)
-    #       echo "Raw detected directories:"
-    #       echo "$dirs"
-    #       # Create a compact JSON array (single-line)
-    #       if [[ -z "$dirs" ]]; then
-    #         json="[]"
-    #       else
-    #         json=$(printf '%s\n' "$dirs" | jq -R . | jq -s -c .)
-    #       fi
-    #       echo "Detected directories: $json"
-    #       echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
+            auth:
+              - "auth/**"
+            block:
+              - "block/**"
+            customfield:
+              - "customfield/**"
+            enrol:
+              - "enrol/**"
+            local:
+              - "local/**"
+            theme:
+              - "theme/**"
+            tool:
+              - "tool/**"
 
       - name: Extract changed directories
         id: list_dirs
         run: |
-           echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}, ${{ steps.filter.outputs.auth_files }}, ${{ steps.filter.outputs.block_files }}, ${{ steps.filter.outputs.customfield_files }}, ${{ steps.filter.outputs.enrol_files }}, ${{ steps.filter.outputs.local_files }}, ${{ steps.filter.outputs.theme_files }}, ${{ steps.filter.outputs.tool_files }}"
-           # Combine all changed files
-           all_changed_files="${{ steps.filter.outputs.mod_files }} ${{ steps.filter.outputs.auth_files }} ${{ steps.filter.outputs.block_files }} ${{ steps.filter.outputs.customfield_files }} ${{ steps.filter.outputs.enrol_files }} ${{ steps.filter.outputs.local_files }} ${{ steps.filter.outputs.theme_files }} ${{ steps.filter.outputs.tool_files }}"
-           # Remove square brackets, split by comma, trim spaces, and extract the first folder
-           dirs=$(echo "$all_changed_files" \
-              | sed 's/[][]//g' \
-              | tr ',' '\n' \
-              | sed 's/^ *//; s/ *$//' \
-              | sed -E 's|^([^/]+/[^/]+).*|\1|' \
-              | sort -u)
-            echo "Raw detected directories:"
-            echo "$dirs"
-            # Create a compact JSON array (single-line)
-            if [[ -z "$dirs" ]]; then
-             json="[]"
-            else
-             json=$(printf '%s\n' "$dirs" | jq -R . | jq -s -c .)
-            fi
-            echo "Detected directories: $json"
-            echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
+          echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}, ${{ steps.filter.outputs.auth_files }}, ${{ steps.filter.outputs.block_files }}, ${{ steps.filter.outputs.customfield_files }}, ${{ steps.filter.outputs.enrol_files }}, ${{ steps.filter.outputs.local_files }}, ${{ steps.filter.outputs.theme_files }}, ${{ steps.filter.outputs.tool_files }}"
+          # Combine all changed files
+          all_changed_files="${{ steps.filter.outputs.mod_files }} ${{ steps.filter.outputs.auth_files }} ${{ steps.filter.outputs.block_files }} ${{ steps.filter.outputs.customfield_files }} ${{ steps.filter.outputs.enrol_files }} ${{ steps.filter.outputs.local_files }} ${{ steps.filter.outputs.theme_files }} ${{ steps.filter.outputs.tool_files }}"
+          # Remove square brackets, split by comma, trim spaces, and extract the first folder
+          dirs=$(echo "$all_changed_files" \
+                  | sed 's/[][]//g' \
+                  | tr ',' '\n' \
+                  | sed 's/^ *//; s/ *$//' \
+                  | sed -E 's|^([^/]+/[^/]+).*|\1|' \
+                  | sort -u)
+          echo "Raw detected directories:"
+          echo "$dirs"
+          # Create a compact JSON array (single-line)
+          if [[ -z "$dirs" ]]; then
+            json="[]"
+          else
+            json=$(printf '%s\n' "$dirs" | jq -R . | jq -s -c .)
+          fi
+          echo "Detected directories: $json"
+          echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
 
   package:
     name: Package Changed Directories
     needs: find-changed
-    if: ${{ needs.find-changed.outputs.changed_dirs != '' && needs.find-changed.outputs.changed_dirs != '[]' }}
+    if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
     strategy:
       matrix:
         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
@@ -120,31 +111,31 @@ jobs:
         with:
           name: deployment-package-${{ steps.zip.outputs.safe_name }} 
           path: ${{ steps.zip.outputs.zip_file }}
-          retention-days: 5    
+          retention-days: 5
 
-    deploy:
-      name: Deploy to Moodle Instance
-      needs: package
-      if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
-      strategy:
-         matrix:
-           dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
-      runs-on: self-hosted
-      steps:
+  deploy:
+    name: Deploy to Moodle Instance
+    needs: package
+    if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
+    strategy:
+      matrix:
+        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+    runs-on: self-hosted
+    steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-           name: deployment-package-${{ matrix.dir }}
-           path: /tmp
+          name: deployment-package-${{ matrix.dir }}
+          path: /tmp
 
       - name: Determine Moodle Root Path
         id: determine-path
         run: |
           branch="${{ github.event.inputs.branch || github.ref_name }}"
           case "$branch" in
-          dev)  MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
-          main) MOODLE_PATH=${{ env.PROD_MOODLE_ROOT }} ;;
-          *) MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
+            dev)  MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
+            main) MOODLE_PATH=${{ env.PROD_MOODLE_ROOT }} ;;
+            *) MOODLE_PATH=${{ env.DEV_MOODLE_ROOT }} ;;
           esac
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
@@ -154,8 +145,8 @@ jobs:
           TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
           BACKUP_FILE="/tmp/${{ matrix.dir }}-backup-${TIMESTAMP}.zip"
           if [ -d "$TARGET_DIR" ]; then
-          sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
-          echo "Backup created at $BACKUP_FILE"
+            sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
+            echo "Backup created at $BACKUP_FILE"
           else
             echo "No existing directory found at $TARGET_DIR, skipping backup."
           fi
