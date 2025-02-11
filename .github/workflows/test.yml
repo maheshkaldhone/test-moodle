@@ -72,6 +72,7 @@ jobs:
           fi
           echo "Detected directories: $json"
           echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
+          
   package:
     name: Package Changed Directories
     needs: find-changed
@@ -114,10 +115,10 @@ jobs:
   deploy:
     name: Deploy to Moodle Instance
     needs: package
-    #if: ${{ needs.find-changed.outputs.changed_dirs != '[]' }}
+    if: ${{ needs.find-changed.outputs.changed_dirs != '[]' && needs.find-changed.outputs.changed_dirs != '' }}
     strategy:
       matrix:
-        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs) }}
+        dir: ${{ (needs.find-changed.outputs.changed_dirs && fromJson(needs.find-changed.outputs.changed_dirs)) || [] }}
     runs-on: self-hosted
     steps:
       - name: Download Artifact
