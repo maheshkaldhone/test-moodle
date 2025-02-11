@@ -124,7 +124,7 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: deployment-package-${{ matrix.dir }}
+          name: deployment-package-${{ steps.zip.outputs.safe_name }}
           path: /tmp
 
       - name: Determine Moodle Root Path
