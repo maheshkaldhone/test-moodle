@@ -57,7 +57,6 @@ jobs:
           fi
           echo "Detected directories: $json"
           echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
-
   package:
     name: Package Changed Directories
     needs: find-changed
@@ -111,7 +110,6 @@ jobs:
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           echo "Matrix directory: ${{ matrix.dir }}"
           echo "Safe directory name: $SAFE_NAME"
-
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
@@ -130,7 +128,6 @@ jobs:
           esac
           echo "Moodle root path: $MOODLE_PATH"
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
-
       - name: Backup current directory
         run: |
             TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
