@@ -146,17 +146,7 @@ jobs:
               echo "Backup created at $BACKUP_FILE"
             else
               echo "No existing directory found at $TARGET_DIR, skipping backup."
-            fi
-        
-      # - name: Deploy to Moodle
-      #   run: |
-      #     DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
-      #     ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "$(echo "${{ matrix.dir }}" | tr '/' '-')-*.zip")
-      #     echo "Deploying to directory: $DEPLOY_DIR"
-      #     echo "ZIP file: $ZIP_FILE"
-      #     sudo unzip -qo "$ZIP_FILE" -d "$DEPLOY_DIR"
-      #     sudo chown -R www-data:www-data "$DEPLOY_DIR/$(basename ${{ matrix.dir }})"
-      #     echo "Deployment completed for ${{ matrix.dir }}"
+            fi        
 
       - name: Deploy to Moodle
         run: |
