@@ -101,10 +101,11 @@ jobs:
       matrix:
         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
     runs-on: 
-      - self-hosted
-      - Linux
-      - X64
-      - ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+          - self-hosted
+          - Linux
+          - X64
+          - ${{ github.event.inputs.branch == 'dev' && 'dev' || 'prod' }} 
+    if: contains(fromJson('["dev", "main"]'), github.event.inputs.branch)
     steps:
       - name: Log Matrix Directory
         run: |
