@@ -57,6 +57,7 @@ jobs:
           fi
           echo "Detected directories: $json"
           echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
+          
   package:
     name: Package Changed Directories
     needs: find-changed
