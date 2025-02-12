@@ -104,7 +104,7 @@ jobs:
       - self-hosted
       - Linux
       - X64
-      - ${{ github.event.inputs.branch == 'dev' && 'dev' || 'prod' }}
+      - ${{ github.event.inputs.branch || github.ref_name == 'dev' && 'dev' || 'prod' }}
     steps:
       - name: Log Matrix Directory
         run: |
