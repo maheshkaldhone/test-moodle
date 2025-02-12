@@ -104,7 +104,7 @@ jobs:
           - self-hosted
           - Linux
           - X64
-          - ${{ github.event.inputs.branch == 'dev' && 'dev' || github.event.inputs.branch == 'main' && 'prod' || 'dev' }}
+          - ${{ github.event.inputs.branch == 'dev' && 'moodle-dev' || 'moodle-prod' }}
     steps:
       - name: Log Matrix Directory
         run: |
