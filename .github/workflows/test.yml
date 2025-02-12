@@ -100,7 +100,11 @@ jobs:
     strategy:
       matrix:
         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
-    runs-on: self-hosted
+    runs-on: 
+      - self-hosted
+      - Linux
+      - X64
+      - ${{ github.event.inputs.branch == 'dev' && 'dev' || 'prod' }} 
     steps:
       - name: Log Matrix Directory
         run: |
