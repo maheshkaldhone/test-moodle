@@ -100,7 +100,7 @@ jobs:
     strategy:
       matrix:
         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
-    runs-on: ${{ github.ref_name == 'main' && 'moodle-prod' || github.ref_name == 'dev' && 'moodle-dev' || 'self-hosted' }}
+    runs-on: ${{ ((github.event.inputs.branch || github.ref_name) == 'main') && 'moodle-prod' || 'moodle-dev' }}
     
           
     steps:
