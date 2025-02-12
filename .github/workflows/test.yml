@@ -34,7 +34,6 @@ jobs:
           filters: |
             mod:
               - "mod/**"
-
       - name: Extract changed directories
         id: list_dirs
         run: |
@@ -141,19 +140,28 @@ jobs:
           echo "Moodle root path: $MOODLE_PATH"
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
+
+
       - name: Backup current directory
         run: |
-          TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-          TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
-          BACKUP_FILE="/tmp/${{ matrix.dir }}-backup-${TIMESTAMP}.zip"
-          echo "Backing up directory: $TARGET_DIR"
-          echo "Backup file: $BACKUP_FILE"
-          if [ -d "$TARGET_DIR" ]; then
-            sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
-            echo "Backup created at $BACKUP_FILE"
-          else
-            echo "No existing directory found at $TARGET_DIR, skipping backup."
-          fi
+            TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+            TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
+            BACKUP_DIR="/tmp/moodle-backup"
+            BACKUP_FILE="${BACKUP_DIR}/$(basename '${{ matrix.dir }}')-backup-${TIMESTAMP}.zip"
+        
+            echo "Ensuring backup directory exists: $BACKUP_DIR"
+            sudo mkdir -p "$BACKUP_DIR"
+        
+            echo "Backing up directory: $TARGET_DIR"
+            echo "Backup file: $BACKUP_FILE"
+            if [ -d "$TARGET_DIR" ]; then
+              sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
+              echo "Backup created at $BACKUP_FILE"
+            else
+              echo "No existing directory found at $TARGET_DIR, skipping backup."
+            fi
+        
+        
 
       - name: Deploy to Moodle
         run: |
