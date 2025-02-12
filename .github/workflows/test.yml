@@ -100,11 +100,13 @@ jobs:
     strategy:
       matrix:
         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
+        runner_label: ${{ github.ref == 'refs/heads/main' && 'moodle-prod' || 'moodle-dev' }}
     runs-on: 
           - self-hosted
           - Linux
           - X64
-          - ${{ github.event.inputs.branch == 'dev' && 'moodle-dev' || 'moodle-prod' }}
+          - ${{ matrix.runner_label }}
+          
     steps:
       - name: Log Matrix Directory
         run: |
