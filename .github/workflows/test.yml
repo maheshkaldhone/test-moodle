@@ -104,8 +104,7 @@ jobs:
           - self-hosted
           - Linux
           - X64
-          - ${{ github.event.inputs.branch == 'dev' && 'dev' || 'prod' }} 
-    if: contains(fromJson('["dev", "main"]'), github.event.inputs.branch)
+          - ${{ github.event.inputs.branch == 'dev' && 'dev' || github.event.inputs.branch == 'main' && 'prod' || 'dev' }}
     steps:
       - name: Log Matrix Directory
         run: |
