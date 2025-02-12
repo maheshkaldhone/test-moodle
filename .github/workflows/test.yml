@@ -15,7 +15,6 @@ on:
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
-  DEV_MOODLE_ROOT: /var/www/html/moodle-dev
 
 jobs:
   find-changed:
@@ -68,7 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       safe_name: ${{ steps.zip.outputs.safe_name }}
-      zip_file: ${{ steps.zip.outputs.zip_file }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -77,22 +75,27 @@ jobs:
         id: zip
         run: |
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
-          TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-          ZIP_FILE="${SAFE_NAME}-${TIMESTAMP}.zip"
+          ZIP_FILE="${SAFE_NAME}-$(date +'%Y%m%d-%H%M%S').zip"
+      
+                                                
           BASE_DIR=$(basename "${{ matrix.dir }}")
+      
+                                                                    
           cd "$(dirname "${{ matrix.dir }}")"
           zip -qr "../$ZIP_FILE" "$BASE_DIR"
           cd -
+      
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
 
+                                      
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: deployment-package-${{ steps.zip.outputs.safe_name }}
           path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
-
+ 
   deploy:
     name: Deploy to Moodle Instance
     needs: [find-changed, package]
@@ -107,13 +110,13 @@ jobs:
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           echo "Matrix directory: ${{ matrix.dir }}"
           echo "Safe directory name: $SAFE_NAME"
-
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
           name: deployment-package-${{ needs.package.outputs.safe_name }}
-          path: /tmp/artifacts
-
+          path: /tmp
+            
+                                                                 
       - name: Determine Moodle Root Path
         id: determine-path
         run: |
@@ -125,28 +128,29 @@ jobs:
           esac
           echo "Moodle root path: $MOODLE_PATH"
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
-
       - name: Backup current directory
         run: |
-          TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-          TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
-          BACKUP_DIR="/tmp/moodle-backup"
-          BACKUP_FILE="${BACKUP_DIR}/$(basename "${{ matrix.dir }}")-backup-${TIMESTAMP}.zip"
-          echo "Ensuring backup directory exists: $BACKUP_DIR"
-          sudo mkdir -p "$BACKUP_DIR"
-          echo "Backing up directory: $TARGET_DIR"
-          echo "Backup file: $BACKUP_FILE"
-          if [ -d "$TARGET_DIR" ]; then
-            sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
-            echo "Backup created at $BACKUP_FILE"
-          else
-            echo "No existing directory found at $TARGET_DIR, skipping backup."
-          fi
-
+            TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+            TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
+            BACKUP_DIR="/tmp/moodle-backup"
+            BACKUP_FILE="${BACKUP_DIR}/$(basename '${{ matrix.dir }}')-backup-${TIMESTAMP}.zip"
+        
+            echo "Ensuring backup directory exists: $BACKUP_DIR"
+            sudo mkdir -p "$BACKUP_DIR"
+        
+            echo "Backing up directory: $TARGET_DIR"
+            echo "Backup file: $BACKUP_FILE"
+            if [ -d "$TARGET_DIR" ]; then
+              sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
+              echo "Backup created at $BACKUP_FILE"
+            else
+              echo "No existing directory found at $TARGET_DIR, skipping backup."
+            fi
+        
       - name: Deploy to Moodle
         run: |
           DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
-          ZIP_FILE="/tmp/artifacts/${{ needs.package.outputs.zip_file }}"
+          ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "$(echo "${{ matrix.dir }}" | tr '/' '-')-*.zip")
           echo "Deploying to directory: $DEPLOY_DIR"
           echo "ZIP file: $ZIP_FILE"
           sudo unzip -qo "$ZIP_FILE" -d "$DEPLOY_DIR"
