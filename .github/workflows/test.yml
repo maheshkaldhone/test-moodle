@@ -58,6 +58,7 @@ jobs:
           echo "Detected directories: $json"
           echo "changed_dirs=$json" >> "$GITHUB_OUTPUT"
           
+          
   package:
     name: Package Changed Directories
     needs: find-changed
@@ -76,27 +77,22 @@ jobs:
         id: zip
         run: |
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
-          ZIP_FILE="${SAFE_NAME}-$(date +'%Y%m%d-%H%M%S').zip"
-      
-                                                
-          BASE_DIR=$(basename "${{ matrix.dir }}")
-      
-                                                                    
+          ZIP_FILE="${SAFE_NAME}-$(date +'%Y%m%d-%H%M%S').zip"                                        
+          BASE_DIR=$(basename "${{ matrix.dir }}")                                                                    
           cd "$(dirname "${{ matrix.dir }}")"
           zip -qr "../$ZIP_FILE" "$BASE_DIR"
-          cd -
-      
+          cd -     
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
-
-                                      
+                                  
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: deployment-package-${{ steps.zip.outputs.safe_name }}
           path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
- 
+          
+          
   deploy:
     name: Deploy to Moodle Instance
     needs: [find-changed, package]
@@ -111,13 +107,13 @@ jobs:
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           echo "Matrix directory: ${{ matrix.dir }}"
           echo "Safe directory name: $SAFE_NAME"
+
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
           name: deployment-package-${{ needs.package.outputs.safe_name }}
           path: /tmp
-            
-                                                                 
+                                                                            
       - name: Determine Moodle Root Path
         id: determine-path
         run: |
@@ -129,6 +125,7 @@ jobs:
           esac
           echo "Moodle root path: $MOODLE_PATH"
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
+
       - name: Backup current directory
         run: |
             TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
@@ -163,4 +160,3 @@ jobs:
               echo "No valid ZIP file found for deployment!"
               exit 1
             fi
-        
