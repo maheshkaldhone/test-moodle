@@ -39,9 +39,9 @@ jobs:
         id: list_dirs
         run: |
           echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
-          # Combine all changed files
+                                     
           all_changed_files="${{ steps.filter.outputs.mod_files }}"
-          # Remove square brackets, split by comma, trim spaces, and extract the first folder
+                                                                                             
           dirs=$(echo "$all_changed_files" \
                   | sed 's/[][]//g' \
                   | tr ',' '\n' \
@@ -50,7 +50,7 @@ jobs:
                   | sort -u)
           echo "Raw detected directories:"
           echo "$dirs"
-          # Create a compact JSON array (single-line)
+                                                     
           if [[ -z "$dirs" ]]; then
             json="[]"
           else
@@ -68,14 +68,14 @@ jobs:
         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
     runs-on: ubuntu-latest
     outputs:
-      zip_file: ${{ steps.zip.outputs.zip_file }}
+      safe_name: ${{ steps.zip.outputs.safe_name }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Generate Timestamp
-        id: timestamp
-        run: echo "time=$(date +'%Y%m%d-%H%M%S')" >> "$GITHUB_OUTPUT"
+                                
+                     
+                                                                     
 
       - name: Package Directory
         id: zip
@@ -83,18 +83,18 @@ jobs:
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           ZIP_FILE="${SAFE_NAME}-$(date +'%Y%m%d-%H%M%S').zip"
       
-          # Extract just the last directory name
+                                                
           BASE_DIR=$(basename "${{ matrix.dir }}")
       
-          # Create ZIP containing only the BASE_DIR and its contents
+                                                                    
           cd "$(dirname "${{ matrix.dir }}")"
           zip -qr "../$ZIP_FILE" "$BASE_DIR"
           cd -
       
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
-          echo "ZIP file created: $ZIP_FILE"
-          echo "Safe name: $SAFE_NAME"
+
+                                      
       
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -102,30 +102,31 @@ jobs:
           name: deployment-package-${{ steps.zip.outputs.safe_name }}
           path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
-        env:
-          SAFE_NAME: ${{ steps.zip.outputs.safe_name }}
+
+                                                       
       
   deploy:
     name: Deploy to Moodle Instance
-    needs: [find-changed, package] 
+    needs: [find-changed, package]
     if: ${{ needs.find-changed.outputs.changed_dirs != '[]' && needs.find-changed.outputs.changed_dirs != '' }}
     strategy:
-       matrix:
-         dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
+      matrix:
+        dir: ${{ fromJson(needs.find-changed.outputs.changed_dirs || '[]') }}
     runs-on: self-hosted
     steps:
       - name: Log Matrix Directory
         run: |
+          SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           echo "Matrix directory: ${{ matrix.dir }}"
-          echo "Safe directory name: $(echo "${{ matrix.dir }}" | tr '/' '-')"
+          echo "Safe directory name: $SAFE_NAME"
 
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-          name: deployment-package-$(echo "${{ matrix.dir }}" | tr '/' '-')
+          name: deployment-package-${{ needs.package.outputs.safe_name }}
           path: /tmp
-        env:
-          SAFE_DIR: $(echo "${{ matrix.dir }}" | tr '/' '-')
+            
+                                                            
 
 
       - name: Determine Moodle Root Path
@@ -153,7 +154,7 @@ jobs:
           else
             echo "No existing directory found at $TARGET_DIR, skipping backup."
           fi
-          
+
       - name: Deploy to Moodle
         run: |
           DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
