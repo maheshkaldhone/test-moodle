@@ -15,6 +15,7 @@ on:
 
 env:
   PROD_MOODLE_ROOT: /var/www/html/moodle
+  DEV_MOODLE_ROOT: /var/www/html/moodle-dev
 
 jobs:
   find-changed:
@@ -34,13 +35,12 @@ jobs:
           filters: |
             mod:
               - "mod/**"
+              
       - name: Extract changed directories
         id: list_dirs
         run: |
           echo "Changed files detected: ${{ steps.filter.outputs.mod_files }}"
-                                     
           all_changed_files="${{ steps.filter.outputs.mod_files }}"
-                                                                                             
           dirs=$(echo "$all_changed_files" \
                   | sed 's/[][]//g' \
                   | tr ',' '\n' \
@@ -49,7 +49,6 @@ jobs:
                   | sort -u)
           echo "Raw detected directories:"
           echo "$dirs"
-                                                     
           if [[ -z "$dirs" ]]; then
             json="[]"
           else
@@ -72,29 +71,18 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-                                
-                     
-                                                                     
-
       - name: Package Directory
         id: zip
         run: |
           SAFE_NAME=$(echo "${{ matrix.dir }}" | tr '/' '-')
           ZIP_FILE="${SAFE_NAME}-$(date +'%Y%m%d-%H%M%S').zip"
-      
-                                                
           BASE_DIR=$(basename "${{ matrix.dir }}")
-      
-                                                                    
           cd "$(dirname "${{ matrix.dir }}")"
           zip -qr "../$ZIP_FILE" "$BASE_DIR"
           cd -
-      
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
 
-                                      
-      
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -102,8 +90,6 @@ jobs:
           path: ${{ steps.zip.outputs.zip_file }}
           retention-days: 5
 
-                                                       
-      
   deploy:
     name: Deploy to Moodle Instance
     needs: [find-changed, package]
@@ -123,10 +109,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: deployment-package-${{ needs.package.outputs.safe_name }}
-          path: /tmp
-            
-                                                            
-
+          run-id: ${{ github.run_id }}
+          path: /tmp/artifacts
 
       - name: Determine Moodle Root Path
         id: determine-path
@@ -140,33 +124,27 @@ jobs:
           echo "Moodle root path: $MOODLE_PATH"
           echo "MOODLE_PATH=$MOODLE_PATH" >> "$GITHUB_ENV"
 
-
-
       - name: Backup current directory
         run: |
-            TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
-            TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
-            BACKUP_DIR="/tmp/moodle-backup"
-            BACKUP_FILE="${BACKUP_DIR}/$(basename '${{ matrix.dir }}')-backup-${TIMESTAMP}.zip"
-        
-            echo "Ensuring backup directory exists: $BACKUP_DIR"
-            sudo mkdir -p "$BACKUP_DIR"
-        
-            echo "Backing up directory: $TARGET_DIR"
-            echo "Backup file: $BACKUP_FILE"
-            if [ -d "$TARGET_DIR" ]; then
-              sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
-              echo "Backup created at $BACKUP_FILE"
-            else
-              echo "No existing directory found at $TARGET_DIR, skipping backup."
-            fi
-        
-        
+          TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
+          TARGET_DIR="${MOODLE_PATH}/${{ matrix.dir }}"
+          BACKUP_DIR="/tmp/moodle-backup"
+          BACKUP_FILE="${BACKUP_DIR}/$(basename "${{ matrix.dir }}")-backup-${TIMESTAMP}.zip"
+          echo "Ensuring backup directory exists: $BACKUP_DIR"
+          sudo mkdir -p "$BACKUP_DIR"
+          echo "Backing up directory: $TARGET_DIR"
+          echo "Backup file: $BACKUP_FILE"
+          if [ -d "$TARGET_DIR" ]; then
+            sudo zip -r "$BACKUP_FILE" "$TARGET_DIR"
+            echo "Backup created at $BACKUP_FILE"
+          else
+            echo "No existing directory found at $TARGET_DIR, skipping backup."
+          fi
 
       - name: Deploy to Moodle
         run: |
           DEPLOY_DIR="${MOODLE_PATH}/$(dirname ${{ matrix.dir }})"
-          ZIP_FILE=$(find /tmp -maxdepth 1 -type f -name "$(echo "${{ matrix.dir }}" | tr '/' '-')-*.zip")
+          ZIP_FILE=$(find /tmp/artifacts -maxdepth 1 -type f -name "$(echo "${{ matrix.dir }}" | tr '/' '-')-*.zip" | head -n 1)
           echo "Deploying to directory: $DEPLOY_DIR"
           echo "ZIP file: $ZIP_FILE"
           sudo unzip -qo "$ZIP_FILE" -d "$DEPLOY_DIR"
